@@ -92,21 +92,6 @@ the JSON representation. The HTML PEP 503 index does not carry a
 data-size attribute (that field is JSON-only in PEP 691), so it is not
 surfaced in the emitted HTML.
 
-## Library API
-
-```python
-from pathlib import Path
-from simple_repository.components.local import LocalRepository
-from simple_repository_generator import dump_static
-
-repo = LocalRepository(Path("dist"))
-result = dump_static(repo, Path("build/simple-repo"), copy_resources=True)
-print(result.project_count, result.file_count, result.repo_bytes)
-```
-
-`dump_static` accepts any `SimpleRepository`, so you can compose sources
-with `simple-repository`'s existing components before serializing.
-
 ## Possible future extensions
 
 - A JSON simple-index emitter (PEP 691) for hosts that can serve the
