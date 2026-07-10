@@ -52,20 +52,26 @@ Output tree:
 build/simple-repo/
   simple/
     index.html                                          # project list
-    tiny-pkg/
+    some-project/
       index.html                                        # project page
   packages/
-    tiny-pkg/
-      tiny_pkg-0.1.0-py3-none-any.whl
-      tiny_pkg-0.1.0-py3-none-any.whl.metadata          # PEP 658 sidecar
-      tiny_pkg-0.1.0.tar.gz
+    some-project/
+      some_project-0.1.0-py3-none-any.whl
+      some_project-0.1.0-py3-none-any.whl.metadata          # PEP 658 sidecar
+      some_project-0.1.0.tar.gz
 ```
 
-Point pip or uv at the `simple/` subdirectory:
+Point pip or uv at the `simple/` subdirectory. Any URL scheme pip
+supports for `--index-url` works, including `file://` for a local
+sanity check (the path after `file://` must be absolute):
 
 ```
-pip install --index-url https://you.github.io/repo/simple/ tiny-pkg
+pip install --index-url "file://$(pwd)/build/simple-repo/simple/" some-project
 ```
+
+The output is a plain directory of static files, so it drops straight
+into a GitHub Pages site, an S3 bucket, or anything served by
+`python -m http.server`.
 
 ### Metadata exposed to clients
 
