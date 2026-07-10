@@ -88,15 +88,23 @@ def test_cli_crawls_flat_directory(tmp_path: Path) -> None:
     assert not (out / "packages" / "readme").exists()
 
 
-def test_cli_metadata_injector_adds_core_metadata_attribute(tmp_path: Path) -> None:
+def test_cli_advertises_metadata_only_with_copy(tmp_path: Path) -> None:
     dist = _make_flat_dist(tmp_path)
-    out = tmp_path / "out"
 
-    cli_main(["--output", str(out), str(dist)])
+    # Without --copy we do not host the .metadata sidecars, so we must not
+    # advertise data-core-metadata (that would be a broken promise to pip).
+    out_nocopy = tmp_path / "out-nocopy"
+    cli_main(["--output", str(out_nocopy), str(dist)])
+    nocopy_page = (out_nocopy / "simple" / "foo-bar" / "index.html").read_text()
+    assert "data-core-metadata" not in nocopy_page
 
-    page = (out / "simple" / "foo-bar" / "index.html").read_text()
-    # MetadataInjectorRepository advertises PEP 658 metadata for every wheel.
-    assert 'data-core-metadata="true"' in page
+    # With --copy, MetadataInjectorRepository is enabled and pages advertise
+    # the sidecar (which we also materialise on disk in the copy branch,
+    # exercised in test_cli_crawls_flat_directory).
+    out_copy = tmp_path / "out-copy"
+    cli_main(["--output", str(out_copy), "--copy", str(dist)])
+    copy_page = (out_copy / "simple" / "foo-bar" / "index.html").read_text()
+    assert 'data-core-metadata="true"' in copy_page
 
 
 def test_cli_refuses_missing_source(tmp_path: Path) -> None:

@@ -95,12 +95,17 @@ def main(argv: list[str] | None = None) -> None:
         async with AsyncExitStack() as stack:
             client = await stack.enter_async_context(httpx.AsyncClient())
             repos = [_build_source(spec, client) for spec in args.sources]
-            inner: SimpleRepository = (
+            repo: SimpleRepository = (
                 repos[0]
                 if len(repos) == 1
                 else PrioritySelectedProjectsRepository(repos)
             )
-            repo = MetadataInjectorRepository(inner, client)
+            # PEP 658 metadata is only injected when we are also going to
+            # materialise the .metadata sidecars next to the copied files.
+            # Without --copy, advertising data-core-metadata would be a lie:
+            # the source may not host the .metadata file we claim exists.
+            if args.copy:
+                repo = MetadataInjectorRepository(repo, client)
             return await _dump_static_async(
                 repo, args.output, copy_resources=args.copy, http_client=client,
             )

@@ -71,11 +71,15 @@ pip install --index-url https://you.github.io/repo/simple/ tiny-pkg
 
 The emitted project pages carry every attribute the source repository
 provides: `data-requires-python`, `data-yanked`, `data-gpg-sig`. In
-addition, the generator wraps the source in `MetadataInjectorRepository`,
-which advertises `data-core-metadata="true"` on every wheel. In `--copy`
-mode the corresponding `.metadata` sidecar file (extracted from each
-wheel's `*.dist-info/METADATA`) is written alongside the wheel, so pip
-and uv can resolve dependencies without downloading the wheel itself.
+`--copy` mode the generator additionally wraps the source in
+`MetadataInjectorRepository`, extracts each wheel's `*.dist-info/METADATA`
+into a `.metadata` sidecar next to the copied wheel, and advertises
+`data-core-metadata="true"` on the page, so pip and uv can resolve
+dependencies without downloading the full wheel.
+
+Without `--copy` the pages are passed through unchanged. In particular
+`data-core-metadata` is not injected, because there is no matching
+`.metadata` file to serve alongside the source URL.
 
 File size and upload time are recorded in the `File` model and appear in
 the JSON representation. The HTML PEP 503 index does not carry a
