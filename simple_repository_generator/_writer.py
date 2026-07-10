@@ -21,16 +21,16 @@ def normalize(name: str) -> str:
 def rewrite_urls_relative(
     page: model.ProjectDetail,
     page_path: Path,
-    resource_paths: dict[str, Path],
 ) -> model.ProjectDetail:
-    """Return a copy of *page* whose file URLs are ``page_path``-relative paths
-    into *resource_paths* (keyed by ``file.filename``)."""
+    """Return a copy of *page* in which any file URL that is an absolute
+    filesystem path is rewritten to be relative to ``page_path``. Files
+    whose URL uses a URL scheme (``file://``, ``https://``, ...) are left
+    unchanged."""
     page_dir = page_path.parent
     new_files = tuple(
-        dataclasses.replace(
-            f,
-            url=os.path.relpath(resource_paths[f.filename], start=page_dir),
-        )
+        dataclasses.replace(f, url=os.path.relpath(f.url, start=page_dir))
+        if os.path.isabs(f.url)
+        else f
         for f in page.files
     )
     return dataclasses.replace(page, files=new_files)

@@ -20,6 +20,7 @@ from simple_repository.components.priority_selected import (
 
 from ._api import _dump_static_async
 from ._flat import FlatDirectoryRepository
+from ._mirroring import MirroringRepository
 from ._writer import human_bytes
 
 
@@ -100,15 +101,12 @@ def main(argv: list[str] | None = None) -> None:
                 if len(repos) == 1
                 else PrioritySelectedProjectsRepository(repos)
             )
-            # PEP 658 metadata is only injected when we are also going to
-            # materialise the .metadata sidecars next to the copied files.
-            # Without --copy, advertising data-core-metadata would be a lie:
-            # the source may not host the .metadata file we claim exists.
             if args.copy:
                 repo = MetadataInjectorRepository(repo, client)
-            return await _dump_static_async(
-                repo, args.output, copy_resources=args.copy, http_client=client,
-            )
+                repo = MirroringRepository(
+                    repo, args.output / "packages", http_client=client,
+                )
+            return await _dump_static_async(repo, args.output)
 
     result = asyncio.run(_run())
 
