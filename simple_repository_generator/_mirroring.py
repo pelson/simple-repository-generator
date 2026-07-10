@@ -37,7 +37,9 @@ class MirroringRepository(core.RepositoryContainer):
         http_client: httpx.AsyncClient,
     ) -> None:
         super().__init__(source)
-        self._mirror_dir = mirror_dir
+        # Absolute so hosted-vs-external accounting downstream can compare
+        # paths without caring about the caller's cwd.
+        self._mirror_dir = mirror_dir.resolve()
         self._http_client = http_client
         self._mirror_paths: dict[tuple[str, str], Path] = {}
 

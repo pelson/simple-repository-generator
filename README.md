@@ -42,7 +42,7 @@ Wrote simple index to build/simple-repo
   sources:      dist/
   projects:     1
   files:        2
-  repo size:    2.0 KiB (2.8 KiB in output directory)
+  repo size:    2.9 KiB (13.7 KiB in output directory)
 ```
 
 Output tree:

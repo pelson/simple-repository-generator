@@ -114,9 +114,14 @@ def main(argv: list[str] | None = None) -> None:
     print(f"  sources:      {', '.join(args.sources)}")
     print(f"  projects:     {result.project_count}")
     print(f"  files:        {result.file_count}")
-    repo_size = human_bytes(result.referenced_bytes)
+    extras = []
     if result.repo_bytes != result.referenced_bytes:
-        repo_size += f" ({human_bytes(result.repo_bytes)} in output directory)"
+        extras.append(f"{human_bytes(result.repo_bytes)} in output directory")
+    if result.external_bytes:
+        extras.append(f"{human_bytes(result.external_bytes)} referenced outside")
+    repo_size = human_bytes(result.referenced_bytes)
+    if extras:
+        repo_size += " (" + ", ".join(extras) + ")"
     print(f"  repo size:    {repo_size}")
     if not args.copy:
         print("  (hrefs point at the source files; use --copy for a portable tree)")

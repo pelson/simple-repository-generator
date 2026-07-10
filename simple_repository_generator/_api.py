@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import os.path
 from pathlib import Path
 
 from simple_repository import SimpleRepository
@@ -19,8 +20,12 @@ class DumpResult:
     file_count: int
     #: Total on-disk size of the emitted tree (index + any mirrored resources).
     repo_bytes: int
-    #: Sum of file.size across every distribution the index references.
+    #: Total size of what the repository serves: distribution files plus any
+    #: PEP 658 sidecars we host on disk.
     referenced_bytes: int
+    #: Portion of ``referenced_bytes`` that lives outside ``out_dir`` (i.e.
+    #: files still fetched from an upstream URL rather than mirrored).
+    external_bytes: int
 
 
 async def _dump_static_async(
@@ -37,18 +42,32 @@ async def _dump_static_async(
 
     file_count = 0
     referenced_bytes = 0
+    external_bytes = 0
+    resolved_out = out_dir.resolve()
 
     for project in project_list.projects:
         normalized = _writer.normalize(project.name)
         page = await repo.get_project_page(normalized)
         page_path = out_dir / "simple" / normalized / "index.html"
-        page = _writer.rewrite_urls_relative(page, page_path)
 
         for file in page.files:
             file_count += 1
             if file.size is not None:
                 referenced_bytes += file.size
+            hosted_here = (
+                os.path.isabs(file.url)
+                and Path(file.url).resolve().is_relative_to(resolved_out)
+            )
+            if hosted_here:
+                # Include the PEP 658 sidecar when we host it on disk.
+                if file.dist_info_metadata:
+                    sidecar = Path(file.url + ".metadata")
+                    if sidecar.is_file():
+                        referenced_bytes += sidecar.stat().st_size
+            elif file.size is not None:
+                external_bytes += file.size
 
+        page = _writer.rewrite_urls_relative(page, page_path)
         _writer.write_text(page_path, _html.render_project_page(page))
 
     return DumpResult(
@@ -57,6 +76,7 @@ async def _dump_static_async(
         file_count=file_count,
         repo_bytes=_writer.dir_size(out_dir),
         referenced_bytes=referenced_bytes,
+        external_bytes=external_bytes,
     )
 
 
