@@ -24,3 +24,6 @@ build/
 .vscode/
 
 # End of .gitignore content managed by acc-py
+
+# Design docs and implementation plans (kept locally, not committed).
+docs/
