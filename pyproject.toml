@@ -7,7 +7,7 @@ name = "simple-repository-generator"
 dynamic = [
   "version",  # The version is taken directly from the repository, using setuptools-scm.
 ]
-# description = "<Insert short description of the project>"
+description = "Generate a static PEP 503 HTML index from local directories of wheels and sdists, or from an existing HTTP simple index"
 readme = "README.md"
 classifiers = [
   "Programming Language :: Python :: 3",
