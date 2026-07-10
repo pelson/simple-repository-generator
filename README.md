@@ -91,6 +91,22 @@ directly, with file size, upload date and other metadata surfaced
 outside the PEP 503 anchor set. Machine clients (pip, uv) only look at
 the `<a>` elements, which stay strictly PEP 503 compliant.
 
+## Related tools
+
+- [`dumb-pypi`](https://github.com/chriskuehl/dumb-pypi) also emits a
+  static PEP 503 tree, but takes a pre-built JSON manifest of files and
+  does not extract PEP 658 metadata sidecars.
+- [`simple-repository-server`](https://github.com/simple-repository/simple-repository-server)
+  if you want a running server rather than a static snapshot.
+  [`simpleindex`](https://github.com/frostming/simpleindex) and
+  [`proxpi`](https://github.com/EpicWink/proxpi) are other runtime
+  options that route or proxy live indexes instead of baking a
+  snapshot.
+- Rolling your own from a directory of wheels is easy until you want
+  PEP 658 `.metadata` sidecars, multi-source merging, or upstream
+  attributes like `data-requires-python` / `data-yanked` preserved
+  faithfully — which is what this tool exists to handle.
+
 ## Possible future extensions
 
 - A JSON simple-index emitter (PEP 691) for hosts that can serve the
