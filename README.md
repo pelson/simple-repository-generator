@@ -87,10 +87,10 @@ Without `--copy` the pages are passed through unchanged. In particular
 `data-core-metadata` is not injected, because there is no matching
 `.metadata` file to serve alongside the source URL.
 
-File size and upload time are recorded in the `File` model and appear in
-the JSON representation. The HTML PEP 503 index does not carry a
-data-size attribute (that field is JSON-only in PEP 691), so it is not
-surfaced in the emitted HTML.
+The emitted HTML is also designed to be human-friendly to browse
+directly, with file size, upload date and other metadata surfaced
+outside the PEP 503 anchor set. Machine clients (pip, uv) only look at
+the `<a>` elements, which stay strictly PEP 503 compliant.
 
 ## Possible future extensions
 
