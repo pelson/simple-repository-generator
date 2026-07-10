@@ -185,4 +185,4 @@ def test_cli_prints_summary(
     assert "projects:     2" in captured
     assert "files:        3" in captured
     assert "repo size:" in captured
-    assert "referenced:" in captured
+    assert "in output directory" in captured
