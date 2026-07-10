@@ -41,8 +41,8 @@ $ simple-repository-generator --copy dist/
 Wrote simple index to build/simple-repo
   sources:      dist/
   projects:     1
-  files:        2
-  repo size:    2.9 KiB (13.7 KiB in output directory)
+  files:        2 (2.9 KiB total)
+  on disk:      13.7 KiB
 ```
 
 Output tree:

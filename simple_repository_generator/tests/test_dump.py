@@ -183,6 +183,9 @@ def test_cli_prints_summary(
 
     captured = capsys.readouterr().out
     assert "projects:     2" in captured
-    assert "files:        3" in captured
-    assert "repo size:" in captured
-    assert "in output directory" in captured
+    assert "files:        3 (" in captured
+    assert "total)" in captured
+    assert "on disk:" in captured
+    # Everything is copied under --copy, so nothing should be flagged as
+    # "not hosted here".
+    assert "not hosted here" not in captured
