@@ -22,9 +22,12 @@ requires-python = ">=3.11"
 
 # The core dependencies of the project.
 dependencies = [
-  # "numpy",
-  # "other-mandatory-requirement",
+  "simple-repository",
+  "packaging",
 ]
+
+[project.scripts]
+simple-repository-generator = "simple_repository_generator.__main__:main"
 
 [project.optional-dependencies]
 # The optional dependencies of the project, installable using the "extras" syntax.
