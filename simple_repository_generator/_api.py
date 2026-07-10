@@ -12,8 +12,6 @@ import httpx
 from simple_repository import (
     SimpleRepository,
     content_negotiation,
-    errors,
-    model,
     serializer,
 )
 
@@ -25,20 +23,15 @@ class DumpResult:
     out_dir: Path
     project_count: int
     file_count: int
-    #: Total on-disk size of the emitted tree (index + any copied resources).
+    #: Total on-disk size of the emitted tree (index + any mirrored resources).
     repo_bytes: int
     #: Sum of file.size across every distribution the index references.
-    #: For --copy this equals the copied bytes; without --copy it is the size
-    #: of the upstream files (as reported by the source repository).
     referenced_bytes: int
 
 
 async def _dump_static_async(
     repo: SimpleRepository,
     out_dir: Path,
-    *,
-    copy_resources: bool,
-    http_client: httpx.AsyncClient,
 ) -> DumpResult:
     fmt = content_negotiation.Format.HTML_V1
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -56,32 +49,7 @@ async def _dump_static_async(
         normalized = _writer.normalize(project.name)
         page = await repo.get_project_page(normalized)
         page_path = out_dir / "simple" / normalized / "index.html"
-
-        if copy_resources:
-            resource_paths: dict[str, Path] = {}
-            for file in page.files:
-                resource = await repo.get_resource(normalized, file.filename)
-                dest = out_dir / "packages" / normalized / file.filename
-                await _writer.write_resource(resource, dest, http_client)
-                resource_paths[file.filename] = dest
-
-                # Try to materialize the sibling .metadata file (PEP 658).
-                # Best-effort: if the injector can't extract METADATA
-                # (invalid wheel etc.), skip it.
-                if file.dist_info_metadata and file.filename.endswith(".whl"):
-                    try:
-                        meta = await repo.get_resource(
-                            normalized, file.filename + ".metadata",
-                        )
-                    except errors.ResourceUnavailable:
-                        pass
-                    else:
-                        await _writer.write_resource(
-                            meta,
-                            dest.with_name(dest.name + ".metadata"),
-                            http_client,
-                        )
-            page = _writer.rewrite_urls_relative(page, page_path, resource_paths)
+        page = _writer.rewrite_urls_relative(page, page_path)
 
         for file in page.files:
             file_count += 1
@@ -99,30 +67,13 @@ async def _dump_static_async(
     )
 
 
-async def _dump_static_with_client(
-    repo: SimpleRepository,
-    out_dir: Path,
-    *,
-    copy_resources: bool,
-) -> DumpResult:
-    async with httpx.AsyncClient() as client:
-        return await _dump_static_async(
-            repo, out_dir, copy_resources=copy_resources, http_client=client,
-        )
-
-
-def dump_static(
-    repo: SimpleRepository,
-    out_dir: Path,
-    *,
-    copy_resources: bool = False,
-) -> DumpResult:
+def dump_static(repo: SimpleRepository, out_dir: Path) -> DumpResult:
     """Serialize *repo* as a static PEP 503 HTML tree under *out_dir*.
 
-    When ``copy_resources`` is True, distribution files are copied into
-    ``out_dir/packages/<normalized-name>/`` and the emitted pages use
-    relative hrefs. When False, hrefs are passed through unchanged.
+    Distribution hrefs are taken verbatim from ``repo``'s pages, except
+    that absolute filesystem paths (as produced by
+    :class:`~simple_repository_generator.MirroringRepository`) are
+    rewritten relative to each page. To produce a portable, self-contained
+    tree, wrap the source repository in ``MirroringRepository`` first.
     """
-    return asyncio.run(
-        _dump_static_with_client(repo, out_dir, copy_resources=copy_resources),
-    )
+    return asyncio.run(_dump_static_async(repo, out_dir))
