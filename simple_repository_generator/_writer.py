@@ -8,6 +8,7 @@ import os.path
 import shutil
 from pathlib import Path
 
+import httpx
 import packaging.utils
 
 from simple_repository import model
@@ -40,6 +41,36 @@ def write_text(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def copy_local_resource(resource: model.LocalResource, dest: Path) -> None:
+async def write_resource(
+    resource: model.Resource,
+    dest: Path,
+    http_client: httpx.AsyncClient,
+) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(resource.path, dest)
+    if isinstance(resource, model.LocalResource):
+        shutil.copyfile(resource.path, dest)
+    elif isinstance(resource, model.TextResource):
+        dest.write_text(resource.text, encoding="utf-8")
+    elif isinstance(resource, model.HttpResource):
+        async with http_client.stream("GET", resource.url) as response:
+            response.raise_for_status()
+            with dest.open("wb") as fh:
+                async for chunk in response.aiter_bytes():
+                    fh.write(chunk)
+    else:
+        raise TypeError(f"Unsupported resource type: {type(resource).__name__}")
+
+
+def dir_size(path: Path) -> int:
+    return sum(p.stat().st_size for p in path.rglob("*") if p.is_file())
+
+
+def human_bytes(n: int) -> str:
+    size = float(n)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if size < 1024 or unit == "TiB":
+            if unit == "B":
+                return f"{int(size)} B"
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} PiB"

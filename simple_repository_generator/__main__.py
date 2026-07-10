@@ -4,37 +4,23 @@ Command-line entry point for simple-repository-generator.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import sys
+from contextlib import AsyncExitStack
 from pathlib import Path
 
+import httpx
+
 from simple_repository import SimpleRepository
-from simple_repository.components.local import LocalRepository
+from simple_repository.components.http import HttpRepository
+from simple_repository.components.metadata_injector import MetadataInjectorRepository
 from simple_repository.components.priority_selected import (
     PrioritySelectedProjectsRepository,
 )
 
-from ._api import dump_static
-
-
-def _looks_like_url(spec: str) -> bool:
-    return spec.startswith(("http://", "https://"))
-
-
-def _build_repository(dirs: list[str]) -> SimpleRepository:
-    repos: list[SimpleRepository] = []
-    for spec in dirs:
-        if _looks_like_url(spec):
-            raise SystemExit(
-                f"HTTP sources are not supported in v1: {spec!r}. "
-                "Pass a local directory instead.",
-            )
-        path = Path(spec)
-        if not path.is_dir():
-            raise SystemExit(f"Not a directory: {spec!r}")
-        repos.append(LocalRepository(path))
-    if len(repos) == 1:
-        return repos[0]
-    return PrioritySelectedProjectsRepository(repos)
+from ._api import _dump_static_async
+from ._flat import FlatDirectoryRepository
+from ._writer import human_bytes
 
 
 def _prepare_output(out_dir: Path, force: bool) -> None:
@@ -48,16 +34,41 @@ def _prepare_output(out_dir: Path, force: bool) -> None:
         )
 
 
+def _build_source(
+    spec: str,
+    http_client: httpx.AsyncClient,
+) -> SimpleRepository:
+    if spec.startswith(("http://", "https://")):
+        return HttpRepository(url=spec, http_client=http_client)
+    path = Path(spec)
+    if not path.is_dir():
+        raise SystemExit(f"Not a directory: {spec!r}")
+    repo = FlatDirectoryRepository(path)
+    if repo.file_count() == 0:
+        raise SystemExit(
+            f"No wheels or sdists found under {path}. "
+            "Expected files named like <name>-<version>-*.whl or "
+            "<name>-<version>.tar.gz.",
+        )
+    return repo
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="simple-repository-generator",
-        description="Emit a static PEP 503 HTML index from local wheel/sdist directories.",
+        description=(
+            "Emit a static PEP 503 HTML index from local wheel/sdist "
+            "directories or HTTP simple indexes."
+        ),
     )
     parser.add_argument(
-        "dirs",
-        metavar="DIR",
+        "sources",
+        metavar="SOURCE",
         nargs="+",
-        help="One or more local directories (LocalRepository layout).",
+        help=(
+            "Local directory (crawled recursively for wheels and sdists) "
+            "or HTTP simple-index URL."
+        ),
     )
     parser.add_argument(
         "--output",
@@ -79,17 +90,31 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     _prepare_output(args.output, args.force)
-    repo = _build_repository(args.dirs)
-    result = dump_static(repo, args.output, copy_resources=args.copy)
+
+    async def _run() -> object:
+        async with AsyncExitStack() as stack:
+            client = await stack.enter_async_context(httpx.AsyncClient())
+            repos = [_build_source(spec, client) for spec in args.sources]
+            inner: SimpleRepository = (
+                repos[0]
+                if len(repos) == 1
+                else PrioritySelectedProjectsRepository(repos)
+            )
+            repo = MetadataInjectorRepository(inner, client)
+            return await _dump_static_async(
+                repo, args.output, copy_resources=args.copy, http_client=client,
+            )
+
+    result = asyncio.run(_run())
 
     print(f"Wrote simple index to {result.out_dir}")
-    print(f"  sources:      {', '.join(args.dirs)}")
+    print(f"  sources:      {', '.join(args.sources)}")
     print(f"  projects:     {result.project_count}")
-    print(f"  distributions:{result.file_count:>4}")
-    if args.copy:
-        print(f"  copied bytes: {result.copied_bytes:,}")
-    else:
-        print("  copy mode:    off (hrefs point at input file locations)")
+    print(f"  files:        {result.file_count}")
+    print(f"  repo size:    {human_bytes(result.repo_bytes)}")
+    print(f"  referenced:   {human_bytes(result.referenced_bytes)}")
+    if not args.copy:
+        print("  (hrefs point at the source files; use --copy for a portable tree)")
 
 
 if __name__ == "__main__":

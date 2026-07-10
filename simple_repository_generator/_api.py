@@ -7,7 +7,15 @@ import asyncio
 import dataclasses
 from pathlib import Path
 
-from simple_repository import SimpleRepository, content_negotiation, model, serializer
+import httpx
+
+from simple_repository import (
+    SimpleRepository,
+    content_negotiation,
+    errors,
+    model,
+    serializer,
+)
 
 from . import _writer
 
@@ -17,7 +25,12 @@ class DumpResult:
     out_dir: Path
     project_count: int
     file_count: int
-    copied_bytes: int  # 0 when copy_resources is False
+    #: Total on-disk size of the emitted tree (index + any copied resources).
+    repo_bytes: int
+    #: Sum of file.size across every distribution the index references.
+    #: For --copy this equals the copied bytes; without --copy it is the size
+    #: of the upstream files (as reported by the source repository).
+    referenced_bytes: int
 
 
 async def _dump_static_async(
@@ -25,18 +38,19 @@ async def _dump_static_async(
     out_dir: Path,
     *,
     copy_resources: bool,
+    http_client: httpx.AsyncClient,
 ) -> DumpResult:
     fmt = content_negotiation.Format.HTML_V1
     out_dir.mkdir(parents=True, exist_ok=True)
 
     project_list = await repo.get_project_list()
     _writer.write_text(
-        out_dir / "index.html",
+        out_dir / "simple" / "index.html",
         serializer.serialize(project_list, fmt),
     )
 
     file_count = 0
-    copied_bytes = 0
+    referenced_bytes = 0
 
     for project in project_list.projects:
         normalized = _writer.normalize(project.name)
@@ -48,26 +62,53 @@ async def _dump_static_async(
             for file in page.files:
                 resource = await repo.get_resource(normalized, file.filename)
                 dest = out_dir / "packages" / normalized / file.filename
-                if isinstance(resource, model.LocalResource):
-                    _writer.copy_local_resource(resource, dest)
-                else:
-                    raise TypeError(
-                        f"Cannot copy resource of type {type(resource).__name__}; "
-                        "only LocalResource is supported in v1.",
-                    )
-                copied_bytes += dest.stat().st_size
+                await _writer.write_resource(resource, dest, http_client)
                 resource_paths[file.filename] = dest
+
+                # Try to materialize the sibling .metadata file (PEP 658).
+                # Best-effort: if the injector can't extract METADATA
+                # (invalid wheel etc.), skip it.
+                if file.dist_info_metadata and file.filename.endswith(".whl"):
+                    try:
+                        meta = await repo.get_resource(
+                            normalized, file.filename + ".metadata",
+                        )
+                    except errors.ResourceUnavailable:
+                        pass
+                    else:
+                        await _writer.write_resource(
+                            meta,
+                            dest.with_name(dest.name + ".metadata"),
+                            http_client,
+                        )
             page = _writer.rewrite_urls_relative(page, page_path, resource_paths)
 
-        file_count += len(page.files)
+        for file in page.files:
+            file_count += 1
+            if file.size is not None:
+                referenced_bytes += file.size
+
         _writer.write_text(page_path, serializer.serialize(page, fmt))
 
     return DumpResult(
         out_dir=out_dir,
         project_count=len(project_list.projects),
         file_count=file_count,
-        copied_bytes=copied_bytes,
+        repo_bytes=_writer.dir_size(out_dir),
+        referenced_bytes=referenced_bytes,
     )
+
+
+async def _dump_static_with_client(
+    repo: SimpleRepository,
+    out_dir: Path,
+    *,
+    copy_resources: bool,
+) -> DumpResult:
+    async with httpx.AsyncClient() as client:
+        return await _dump_static_async(
+            repo, out_dir, copy_resources=copy_resources, http_client=client,
+        )
 
 
 def dump_static(
@@ -83,5 +124,5 @@ def dump_static(
     relative hrefs. When False, hrefs are passed through unchanged.
     """
     return asyncio.run(
-        _dump_static_async(repo, out_dir, copy_resources=copy_resources),
+        _dump_static_with_client(repo, out_dir, copy_resources=copy_resources),
     )
