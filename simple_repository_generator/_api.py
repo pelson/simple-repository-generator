@@ -7,15 +7,9 @@ import asyncio
 import dataclasses
 from pathlib import Path
 
-import httpx
+from simple_repository import SimpleRepository
 
-from simple_repository import (
-    SimpleRepository,
-    content_negotiation,
-    serializer,
-)
-
-from . import _writer
+from . import _html, _writer
 
 
 @dataclasses.dataclass(frozen=True)
@@ -33,13 +27,12 @@ async def _dump_static_async(
     repo: SimpleRepository,
     out_dir: Path,
 ) -> DumpResult:
-    fmt = content_negotiation.Format.HTML_V1
     out_dir.mkdir(parents=True, exist_ok=True)
 
     project_list = await repo.get_project_list()
     _writer.write_text(
         out_dir / "simple" / "index.html",
-        serializer.serialize(project_list, fmt),
+        _html.render_project_list(project_list),
     )
 
     file_count = 0
@@ -56,7 +49,7 @@ async def _dump_static_async(
             if file.size is not None:
                 referenced_bytes += file.size
 
-        _writer.write_text(page_path, serializer.serialize(page, fmt))
+        _writer.write_text(page_path, _html.render_project_page(page))
 
     return DumpResult(
         out_dir=out_dir,

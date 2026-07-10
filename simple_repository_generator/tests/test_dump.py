@@ -137,7 +137,10 @@ def test_cli_advertises_metadata_only_with_copy(tmp_path: Path) -> None:
     out_nocopy = tmp_path / "out-nocopy"
     cli_main(["--output", str(out_nocopy), str(dist)])
     nocopy_page = (out_nocopy / "simple" / "foo-bar" / "index.html").read_text()
-    assert "data-core-metadata" not in nocopy_page
+    # We check for the attribute form: the bare substring
+    # "data-core-metadata" also appears inside the progressive-enhancement
+    # <script> as a CSS selector, but no <a> should carry the attribute.
+    assert 'data-core-metadata="' not in nocopy_page
 
     # With --copy, MetadataInjectorRepository is enabled and pages advertise
     # the sidecar (which we also materialise on disk in the copy branch,
